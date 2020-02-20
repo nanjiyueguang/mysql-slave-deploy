@@ -14,18 +14,18 @@
 
    ```sql
    set sql_log_bin=off; 
-   create user sys_repl@'%' identified by 'sys_repl';
-   grant replication slave on *.* to sys_repl@'%';		
+   create user user@'%' identified by 'password';
+   grant replication slave on *.* to user@'%';		
    ```
 
 5. slave 初始化完成，执行change master
 
    ```sql
        CHANGE MASTER TO
-       MASTER_HOST='smartvoice-mysql',
-       MASTER_USER='sys_repl',
-       MASTER_PASSWORD='sys_repl',
-       MASTER_PORT=3306,
+       MASTER_HOST='XXXX',
+       MASTER_USER='user',
+       MASTER_PASSWORD='password',
+       MASTER_PORT=port,
        MASTER_LOG_FILE='mysql-master-bin.000002', MASTER_LOG_POS=120,
        MASTER_CONNECT_RETRY=10;
    ```
