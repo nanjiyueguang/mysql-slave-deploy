@@ -4,51 +4,36 @@ echo "input sort : namespace service image configmap size_number"
 exit 0;
 fi
 namespace=$1
-service=$2
+service_name=$2
 secretKeyRef=slave-secret
 mysqlimage=$3
-configmap=$4
+configmap=$4 
 size=$5
-pvcname="pvc-slave-${namespace}-${service}"
 
 echo "
-apiVersion: v1
-kind: PersistentVolumeClaim
+apiVersion: apps/v1
+kind: StatefulSet
 metadata:
-  name: ${pvcname}
+  annotations:
+  name: slave-${service_name}
   namespace: ${namespace}
 spec:
-  accessModes:
-  - ReadWriteMany
-  resources:
-    requests:
-      storage: ${size}Gi
-  storageClassName: gfs-sc
----
-apiVersion: extensions/v1beta1
-kind: Deployment
-metadata:
-  labels:
-    app: slave-${service}
-  name: slave-${service}
-  namespace: ${namespace}
-spec:
-  progressDeadlineSeconds: 600
+  podManagementPolicy: OrderedReady
   replicas: 1
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      app: slave-${service}
-  strategy:
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 1
-    type: RollingUpdate
+      app: slave-${service_name}
+  serviceName: slave-${service_name}
   template:
     metadata:
+      annotations:
+        prometheus.io/path: /metrics
+        prometheus.io/port: \"9104\"
+        prometheus.io/scrape: \"true\"
       creationTimestamp: null
       labels:
-        app: slave-${service}
+        app: slave-${service_name}
     spec:
       containers:
       - env:
@@ -56,82 +41,138 @@ spec:
           valueFrom:
             secretKeyRef:
               key: mysql-root-password
-              name: ${secretKeyRef}
+              name: slave-secret
         - name: MYSQL_USER
           valueFrom:
             secretKeyRef:
               key: mysql-sys-repl
-              name: ${secretKeyRef}
+              name: slave-secret
         - name: MYSQL_PASSWORD
           valueFrom:
             secretKeyRef:
               key: mysql-sys-repl-pass
-              name: ${secretKeyRef}
-        image: ${mysqlimage}
-        name: slave-${service}
-        ports:
-        - containerPort: 3306
-          name: mysql-port
-          protocol: TCP
+              name: slave-secret
+        image: 10.51.1.10/hari/mysql:5.7
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
             command:
-            - sh
-            - -c
-            - mysqladmin ping -u root -p\${MYSQL_ROOT_PASSWORD}
+            - /bin/sh
+            - -ec
+            - mysqladmin -uroot -p\${MYSQL_ROOT_PASSWORD} ping
           failureThreshold: 3
           initialDelaySeconds: 30
           periodSeconds: 10
           successThreshold: 1
           timeoutSeconds: 5
+        name: mysql
+        ports:
+        - containerPort: 3306
+          name: mysql-port
+          protocol: TCP
         readinessProbe:
           exec:
             command:
-            - sh
-            - -c
-            - mysqladmin ping -u root -p\${MYSQL_ROOT_PASSWORD}
+            - /bin/sh
+            - -ec
+            - mysql -h127.0.0.1 -uroot -p\${MYSQL_ROOT_PASSWORD} -e \"SELECT 1\"
           failureThreshold: 3
-          initialDelaySeconds: 60
-          periodSeconds: 10
+          initialDelaySeconds: 5
+          periodSeconds: 2
           successThreshold: 1
           timeoutSeconds: 1
         resources:
           requests:
-            cpu: 500m
-            memory: 1Gi
+            cpu: 1
+            memory: 4Gi
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
         volumeMounts:
         - mountPath: /var/lib/mysql
-          name: mysqldb-data
+          name: mysql-data
+          subPath: mysql
         - mountPath: /etc/mysql/conf.d
           name: config-map
-      dnsPolicy: ClusterFirst
-      initContainers:
-      - command:
-        - rm
-        - -fr
-        - /var/lib/mysql/lost+found
-        image: busybox:1.25.0
+      - args:
+        - --collect.binlog_size
+        - --collect.engine_innodb_status
+        - --collect.global_status
+        - --collect.global_variables
+        - --collect.info_schema.innodb_metrics
+        - --collect.info_schema.processlist
+        - --collect.info_schema.processlist.min_time
+        - \"0\"
+        - --collect.info_schema.query_response_time
+        - --collect.slave_hosts
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: mysql-root-password
+              name: slave-secret
+        - name: DATA_SOURCE_NAME
+          value: exporter:MCzTabsdYCgm@(localhost:3306)/
+        image: harbor.cloudminds.com/library/mysqld-exporter:master
         imagePullPolicy: IfNotPresent
-        name: remove-lost-found
-        resources: {}
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /
+            port: 9104
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: prometheus-mysql-exporter
+        ports:
+        - containerPort: 9104
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /
+            port: 9104
+            scheme: HTTP
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
         terminationMessagePath: /dev/termination-log
         terminationMessagePolicy: File
-        volumeMounts:
-        - mountPath: /var/lib/mysql
-          name: mysqldb-data
+      dnsPolicy: ClusterFirst
       restartPolicy: Always
       schedulerName: default-scheduler
       securityContext: {}
       terminationGracePeriodSeconds: 30
       volumes:
-      - name: mysqldb-data
-        persistentVolumeClaim:
-          claimName: ${pvcname}
+      - emptyDir: {}
+        name: conf
       - configMap:
           defaultMode: 420
           name: ${configmap}
         name: config-map
-">${namespace}/new_file.yaml
+  updateStrategy:
+    rollingUpdate:
+      partition: 0
+    type: RollingUpdate
+  volumeClaimTemplates:
+  - metadata:
+      creationTimestamp: null
+      name: mysql-data
+    spec:
+      accessModes:
+      - ReadWriteMany
+      resources:
+        requests:
+          storage: ${size}Gi
+      storageClassName: gfs-sc-one-replica
+    status:
+      phase: Pending
+">${namespace}.${service_name}.yaml
+echo "successful:${namespace}.${service_name}.yaml"
