@@ -52,7 +52,7 @@ spec:
             secretKeyRef:
               key: mysql-sys-repl-pass
               name: slave-secret
-        image: 10.51.1.10/hari/mysql:5.7
+        image: ${mysqlimage}
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
