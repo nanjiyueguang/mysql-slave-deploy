@@ -105,11 +105,6 @@ spec:
         - --collect.info_schema.query_response_time
         - --collect.slave_hosts
         env:
-        - name: MYSQL_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              key: mysql-root-password
-              name: slave-secret
         - name: DATA_SOURCE_NAME
           value: exporter:MCzTabsdYCgm@(localhost:3306)/
         image: harbor.cloudminds.com/library/mysqld-exporter:master
