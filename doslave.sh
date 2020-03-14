@@ -42,16 +42,6 @@ spec:
             secretKeyRef:
               key: mysql-root-password
               name: slave-secret
-        - name: MYSQL_USER
-          valueFrom:
-            secretKeyRef:
-              key: mysql-sys-repl
-              name: slave-secret
-        - name: MYSQL_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              key: mysql-sys-repl-pass
-              name: slave-secret
         image: ${mysqlimage}
         imagePullPolicy: IfNotPresent
         livenessProbe:
