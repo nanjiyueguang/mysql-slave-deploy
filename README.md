@@ -38,3 +38,7 @@
 >  doslave.sh :  生成deployment yaml文件，直接不带参数执行脚本获取帮助 
 >
 >  my.secret :  slave实例使用的密码文件，注意修改root密码
+>
+>  slave-error-restart目录下的文件是自动启动mysql失败的slave用的
+>
+>  

@@ -6,7 +6,7 @@ echo "[`date "+%Y-%m-%d %T"`] $@"
 }
 export -f reportLog
 
-function slaveSecret(){
+function slavecm(){
 local v_namespace=$1
 local v_cm=$2
 local v_service=$3
@@ -26,13 +26,22 @@ sed -i s/selfLink.*//g ${cmdir}/slave_${v_service}.yaml
 sed -i s/uid.*//g ${cmdir}/slave_${v_service}.yaml
 sed -i s/annotations:.*//g ${cmdir}/slave_${v_service}.yaml
 sed -i "/^[[:space:]]*$/d" ${cmdir}/slave_${v_service}.yaml
-#cat ${cmdir}/slave_${v_service}.yaml |grep -iEv "#|^$" >${cmdir}/.slave_${v_service}.yaml
-#mv ${cmdir}/.slave_${v_service}.yaml ${cmdir}/slave_${v_service}.yaml
+
+## /**
+##add the no exists variables like :
+##	log_slave_updates 
+##
+##
+if ! grep -i "log_slave_updates" ${cmdir}/slave_${v_service}.yaml >/dev/null
+  then
+    sed -i '/\[mysqld\]/a\    log_slave_updates = on' ${cmdir}/slave_${v_service}.yaml
+fi
+
 }
 
 
 
-function masterSecret(){
+function mastercm(){
 local v_namespace=$1
 local v_cm=$2
 local v_service=$3
@@ -50,6 +59,7 @@ function modifySecret(){
 dir=./
 namespace=$1
 sed -i "s/namespace:.*/namespace: ${namespace}/g" $dir/my.secret
+cp $dir/my.secret ${namespace}/my.secret
 }
 
 _main(){
@@ -67,8 +77,8 @@ then
     mkdir -pv ${v_namespace} | xargs -I{} bash -c 'reportLog {}'
 fi
 
-slaveSecret ${v_namespace} ${v_cm} ${v_service}
-masterSecret ${v_namespace} ${v_cm} ${v_service}
+slavecm ${v_namespace} ${v_cm} ${v_service}
+mastercm ${v_namespace} ${v_cm} ${v_service}
 modifySecret ${v_namespace}
 }
 

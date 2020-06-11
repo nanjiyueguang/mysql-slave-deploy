@@ -42,7 +42,17 @@ spec:
             secretKeyRef:
               key: mysql-root-password
               name: slave-secret
-        image: ${mysqlimage}
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              key: mysql-sys-repl
+              name: slave-secret
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: mysql-sys-repl-pass
+              name: slave-secret
+        image: harbor.cloudminds.com/mysql/mysql:5.7.29
         imagePullPolicy: IfNotPresent
         livenessProbe:
           exec:
@@ -95,6 +105,11 @@ spec:
         - --collect.info_schema.query_response_time
         - --collect.slave_hosts
         env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: mysql-root-password
+              name: slave-secret
         - name: DATA_SOURCE_NAME
           value: exporter:MCzTabsdYCgm@(localhost:3306)/
         image: harbor.cloudminds.com/library/mysqld-exporter:master
